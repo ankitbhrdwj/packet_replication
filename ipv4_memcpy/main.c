@@ -235,6 +235,8 @@ mcast_forward(struct rte_mbuf *m, struct lcore_queue_conf *qconf)
 {
 	struct ether_addr s_addr = {{160,54,159,32,56,74}};
 
+	uint32_t port_mask = 1; //TODO: replication factor, pass it from the terminal
+	uint32_t port_num = bitcnt(port_mask);
 	struct rte_mbuf *hdr[port_num];
 	int ret = rte_pktmbuf_alloc_bulk(header_pool, hdr, port_num);
 	if(ret == -ENOENT) {
@@ -242,8 +244,6 @@ mcast_forward(struct rte_mbuf *m, struct lcore_queue_conf *qconf)
 		return;
 	}
 
-	uint32_t port_mask = 1; //TODO: replication factor, pass it from the terminal
-	uint32_t port_num = bitcnt(port_mask);
 	for (int i = 0; i < (int )port_num; i++) {
 		mcast_out_pkt(m, hdr[i]);
 		mcast_send_pkt(hdr[i], &s_addr, qconf, 3); //Forward on port 3
