@@ -235,22 +235,15 @@ mcast_forward(struct rte_mbuf *m, struct lcore_queue_conf *qconf)
 {
 	struct ether_addr s_addr = {{160,54,159,32,56,74}};
 
-	/* Remove the Ethernet header from the input packet */
-	struct ether_hdr *ethdr = (struct ether_hdr *)rte_pktmbuf_adj(m, (uint16_t)sizeof(struct ether_hdr));
-	RTE_ASSERT(ethdr != NULL);
-
-	uint32_t port_mask = 1; //TODO: replication factor, pass it from the terminal
-
-	/* Calculate number of destination ports. */
-	uint32_t port_num = bitcnt(port_mask);
-
 	struct rte_mbuf *hdr[port_num];
 	int ret = rte_pktmbuf_alloc_bulk(header_pool, hdr, port_num);
 	if(ret == -ENOENT) {
 		printf("Ret %d\n", ret);
 		return;
 	}
-	
+
+	uint32_t port_mask = 1; //TODO: replication factor, pass it from the terminal
+	uint32_t port_num = bitcnt(port_mask);
 	for (int i = 0; i < (int )port_num; i++) {
 		mcast_out_pkt(m, hdr[i]);
 		mcast_send_pkt(hdr[i], &s_addr, qconf, 3); //Forward on port 3
