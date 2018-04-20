@@ -180,22 +180,25 @@ static inline void
 mcast_out_pkt(struct rte_mbuf *pkt, struct rte_mbuf *hdr)
 {
 	/* prepend new header */
-	hdr->next = pkt;
+        char *eth_hdr = (char *)rte_pktmbuf_prepend(hdr, pkt->pkt_len);
+        if(eth_hdr == NULL) {
+                printf("panic\n");
+        }
 
-	/* update header's fields */
-	hdr->pkt_len = (uint16_t)(hdr->data_len + pkt->pkt_len);
-	hdr->nb_segs = (uint8_t)(pkt->nb_segs + 1);
+	/*Copy the content of old packet into new one*/
+        char *b = rte_pktmbuf_mtod((struct rte_mbuf*)pkt, char *);
+        rte_memcpy(eth_hdr, b, pkt->pkt_len);
 
-	/* copy metadata from source packet*/
-	hdr->port = pkt->port;
-	hdr->vlan_tci = pkt->vlan_tci;
-	hdr->vlan_tci_outer = pkt->vlan_tci_outer;
-	hdr->tx_offload = pkt->tx_offload;
-	hdr->hash = pkt->hash;
+        /* copy metadata from source packet*/
+        hdr->port = pkt->port;
+        hdr->vlan_tci = pkt->vlan_tci;
+        hdr->vlan_tci_outer = pkt->vlan_tci_outer;
+        hdr->tx_offload = pkt->tx_offload;
+        hdr->hash = pkt->hash;
 
-	hdr->ol_flags = pkt->ol_flags;
+        hdr->ol_flags = pkt->ol_flags;
 
-	__rte_mbuf_sanity_check(hdr, 1);
+        __rte_mbuf_sanity_check(hdr, 1);
 }
 
 /*
@@ -209,13 +212,8 @@ mcast_send_pkt(struct rte_mbuf *pkt, struct ether_addr *dest_addr,
 	struct ether_hdr *ethdr;
 	uint16_t len;
 
-	/* Construct Ethernet header. */
-	ethdr = (struct ether_hdr *)rte_pktmbuf_prepend(pkt, (uint16_t)sizeof(*ethdr));
-	if(ethdr == NULL) {
-		printf("Unable to prepend ethernet header\n");
-		rte_pktmbuf_free(pkt);
-		return;	
-	}
+	/* point to ethernet header in packet. */
+	ethdr = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
 
 	ether_addr_copy(dest_addr, &ethdr->d_addr);
 	ether_addr_copy(dest_addr, &ethdr->s_addr);
@@ -245,7 +243,6 @@ mcast_forward(struct rte_mbuf *m, struct lcore_queue_conf *qconf)
 
 	/* Calculate number of destination ports. */
 	uint32_t port_num = bitcnt(port_mask);
-	rte_pktmbuf_refcnt_update(m, (uint16_t)port_num);
 
 	struct rte_mbuf *hdr[port_num];
 	int ret = rte_pktmbuf_alloc_bulk(header_pool, hdr, port_num);
@@ -256,9 +253,9 @@ mcast_forward(struct rte_mbuf *m, struct lcore_queue_conf *qconf)
 	
 	for (int i = 0; i < (int )port_num; i++) {
 		mcast_out_pkt(m, hdr[i]);
-		mcast_send_pkt(hdr[i], &s_addr, qconf, 3);
+		mcast_send_pkt(hdr[i], &s_addr, qconf, 3); //Forward on port 3
 	}
-	mcast_send_pkt(m, &s_addr, qconf, 0);
+	mcast_send_pkt(m, &s_addr, qconf, 0); //Forward on port 0
 }
 
 /* Send burst of outgoing packet, if timeout expires. */
